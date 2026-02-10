@@ -33,6 +33,7 @@ describe("Redeem", async function () {
             address: payableOnft.address,
             abi: payableOnft.abi,
             functionName: "mint",
+            args: ["0x"],
         });
         return (await payableOnft.read.nextTokenId()) - 1n;
     }
@@ -45,14 +46,14 @@ describe("Redeem", async function () {
         mockEndpoint = await viem.deployContract("MockLzEndpoint", [LOCAL_EID]);
 
         // Deploy PayableONFT
-        const chainPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
+        // const chainPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
         payableOnft = await viem.deployContract("PayableONFT", [
             "OmniUSDC NFT",
             "ONFT",
             mockEndpoint.address,
             owner.account.address,
             mockUsdc.address,
-            chainPrefix,
+            LOCAL_EID,
         ]);
 
         // Set peer (required for full ONFT setup)

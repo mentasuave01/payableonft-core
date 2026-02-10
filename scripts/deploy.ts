@@ -1,5 +1,5 @@
 import { network } from "hardhat";
-import { LZ_ENDPOINTS, USDC_ADDRESSES, type NetworkName, saveDeployment, getDeployedNetworks } from "./constants.js";
+import { LZ_ENDPOINTS, LZ_EIDS, USDC_ADDRESSES, ORIGIN_NETWORK, type NetworkName, saveDeployment, getDeployedNetworks } from "./constants.js";
 
 async function main() {
     const { viem } = await network.connect();
@@ -19,13 +19,12 @@ async function main() {
     const lzEndpoint = LZ_ENDPOINTS[networkName];
     const usdcAddress = USDC_ADDRESSES[networkName];
 
-    // Create unique prefix based on chain ID to prevent ID collisions
-    // e.g., Chain ID 421614 -> Prefix 421614000000
-    const chainPrefix = BigInt(chainId) * BigInt(1_000_000);
+    // Origin EID - all deployments must agree on this
+    const originEid = LZ_EIDS[ORIGIN_NETWORK];
 
     console.log("LayerZero Endpoint:", lzEndpoint);
     console.log("USDC Address:", usdcAddress);
-    console.log("Chain Prefix:", chainPrefix.toString());
+    console.log("Origin EID:", originEid);
 
     const [deployer] = await viem.getWalletClients();
     console.log("Deployer:", deployer.account.address);
@@ -36,7 +35,7 @@ async function main() {
         lzEndpoint,                // LayerZero Endpoint V2
         deployer.account.address,  // delegate (owner)
         usdcAddress,               // USDC address
-        chainPrefix,               // chain prefix for token IDs
+        originEid,               // Origin Chain EID
     ]);
 
     console.log("\n✅ PayableONFT deployed successfully!");

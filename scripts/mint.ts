@@ -57,14 +57,30 @@ async function main() {
     await publicClient.waitForTransactionReceipt({ hash: approveHash });
     console.log("Approval confirmed!");
 
-    // Step 3: Mint
-    console.log("\n2. Minting NFT...");
-    const mintHash = await onft.write.mint();
+    // Step 3: Quote Fee (if remote)
+    console.log("\n2. Quoting Mint Fee...");
+    // We use a default explicit options for quoting to match what we might send, 
+    // or just send empty bytes if the contract handles defaults (which it does via mint()).
+    // However, mint() takes `_extraOptions`. We should pass "0x" if we don't want specific settings.
+    const extraOptions = "0x";
+
+    const fee = await onft.read.quoteMint([extraOptions]);
+    console.log("Native fee:", fee.nativeFee.toString(), "wei");
+
+    // Step 4: Mint
+    console.log("\n3. Minting NFT...");
+    // mint(bytes calldata _extraOptions)
+    const mintHash = await onft.write.mint([extraOptions], { value: fee.nativeFee });
     console.log("Mint tx:", mintHash);
     await publicClient.waitForTransactionReceipt({ hash: mintHash });
 
-    console.log("\n✅ NFT minted successfully!");
-    console.log("Check your wallet for the new NFT.");
+    console.log("\n✅ NFT mint transaction confirmed!");
+    if (fee.nativeFee > 0n) {
+        console.log("Since this was a cross-chain request, it may take a few minutes for the NFT to appear on this chain.");
+        console.log("Track at https://layerzeroscan.com/");
+    } else {
+        console.log("Local mint completed.");
+    }
 }
 
 main().catch((error) => {

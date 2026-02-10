@@ -35,14 +35,14 @@ describe("PayableONFT", async function () {
         console.log("MockLzEndpoint deployed:", mockEndpoint.address);
 
         // Deploy PayableONFT
-        const chainPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
+        // const chainPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
         payableOnft = await viem.deployContract("PayableONFT", [
             "OmniUSDC NFT",
             "ONFT",
             mockEndpoint.address,
             owner.account.address,
             mockUsdc.address,
-            chainPrefix,
+            LOCAL_EID,
         ]);
         console.log("PayableONFT deployed:", payableOnft.address);
 
@@ -63,9 +63,9 @@ describe("PayableONFT", async function () {
             assert.equal(getAddress(usdcAddr), getAddress(mockUsdc.address));
         });
 
-        it("Should have correct chain prefix", async () => {
-            const prefix = await payableOnft.read.CHAIN_ID_PREFIX();
-            assert.equal(prefix, BigInt(LOCAL_EID) * BigInt(1_000_000));
+        it("Should have correct origin EID", async () => {
+            const eid = await payableOnft.read.originEid();
+            assert.equal(eid, LOCAL_EID);
         });
 
         it("Should have correct mint price", async () => {
@@ -86,6 +86,8 @@ describe("PayableONFT", async function () {
                     address: payableOnft.address,
                     abi: payableOnft.abi,
                     functionName: "mint",
+                    args: ["0x"],
+                    value: 0n
                 }),
                 /reverted/
             );
@@ -103,11 +105,17 @@ describe("PayableONFT", async function () {
             // Get balance before
             const balanceBefore = await mockUsdc.read.balanceOf([user1.account.address]);
 
+            // Quote fee
+            const extraOptions = "0x";
+            const fee = await payableOnft.read.quoteMint([extraOptions]);
+
             // Mint
             await user1.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
                 functionName: "mint",
+                args: [extraOptions],
+                value: fee.nativeFee
             });
 
             // Check NFT was minted
@@ -131,10 +139,16 @@ describe("PayableONFT", async function () {
                 args: [payableOnft.address, MINT_PRICE],
             });
 
+            // Quote fee
+            const extraOptions = "0x";
+            const fee = await payableOnft.read.quoteMint([extraOptions]);
+
             const hash = await user2.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
                 functionName: "mint",
+                args: [extraOptions],
+                value: fee.nativeFee
             });
 
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -352,10 +366,13 @@ describe("PayableONFT", async function () {
 
             // Try to mint
             try {
+                const extraOptions = "0x";
                 await user1.writeContract({
                     address: payableOnft.address,
                     abi: payableOnft.abi,
                     functionName: "mint",
+                    args: [extraOptions],
+                    value: 0n // Value doesn't matter as it should revert before checks
                 });
                 assert.fail("Should have reverted");
             } catch (error: any) {
@@ -387,15 +404,15 @@ describe("PayableONFT", async function () {
         });
     });
 
-    describe("Token ID Collision Prevention", () => {
-        it("Should use chain prefix for token IDs", async () => {
-            const expectedPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
-            const nextTokenId = await payableOnft.read.nextTokenId();
+    // describe("Token ID Collision Prevention", () => {
+    //     it("Should use chain prefix for token IDs", async () => {
+    //         const expectedPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
+    //         const nextTokenId = await payableOnft.read.nextTokenId();
 
-            // Token ID should be greater than the prefix
-            assert.ok(nextTokenId > expectedPrefix, "Token ID should include chain prefix");
+    //         // Token ID should be greater than the prefix
+    //         // assert.ok(nextTokenId > expectedPrefix, "Token ID should include chain prefix");
 
-            console.log(`✅ Token IDs start from ${expectedPrefix + 1n}`);
-        });
-    });
+    //         // console.log(`✅ Token IDs start from ${expectedPrefix + 1n}`);
+    //     });
+    // });
 });

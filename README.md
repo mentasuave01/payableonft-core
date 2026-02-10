@@ -1,15 +1,14 @@
 # PayableONFT Deployment Guide
 
 ## Contract Overview
-`PayableONFT` is an Omnichain NFT (ONFT) contract built on LayerZero V2 that allows users to mint NFTs by paying with USDC. It supports cross-chain functionality, enabling users to mint on one chain and bridge to **any connected chain** in a single transaction.
+`PayableONFT` is an Omnichain NFT (ONFT) contract built on LayerZero V2. It implements a **Centralized Minting** architecture where all NFTs are minted sequentially on a single **Origin Chain** to ensure unique ID generation, while allowing users to mint from **any connected chain**.
 
 ### Key Features
-- **USDC Payment**: Users pay 10 USDC(default) to mint an NFT.
-- **Multi-Chain**: Deploy to as many networks as needed. Add new networks at any time.
-- **Cross-Chain Minting**: `mintAndBridge` function mints locally and transfers to any destination chain.
-- **Pausable**: Admin can pause minting in case of emergencies.
-- **Collision Prevention**: Uses a chain-specific prefix for token IDs to ensure uniqueness across chains.
-- **Owner Controls**: Admin can withdraw collected USDC and update the USDC token address.
+- **Centralized Minting**: All tokens are minted on the configured **Origin Chain** (e.g., Arbitrum Sepolia).
+- **Cross-Chain Minting**: Users on remote chains pay in USDC, and the contract automatically sends a request to the Origin Chain to mint and bridge the NFT back to them.
+- **USDC Payment**: Users pay 10 USDC (default) to mint.
+- **Native Drop**: The Origin Chain contract can be funded to cover the gas costs of bridging newly minted NFTs back to remote users.
+- **Pausable**: Admin can pause minting globally.
 
 ## Prerequisites
 
@@ -34,14 +33,22 @@
     SEPOLIA_RPC_URL=https://rpc.ankr.com/eth_sepolia
     ```
 
+3.  **Configure Origin Chain**:
+    Open `scripts/constants.ts` and set `ORIGIN_NETWORK` to your desired Origin Chain (default: `arbitrumSepolia`).
+    ```typescript
+    export const ORIGIN_NETWORK: NetworkName = "arbitrumSepolia";
+    ```
+
 ## Deployment Steps
 
-Deploy the contract to **each network** you want to support. You can start with 2 and add more later.
+Deploy the contract to **each network** you want to support. You can start with 2 (Origin + 1 Remote) and add more later.
 
 ### 1. Deploy to Each Network
 ```bash
-# Deploy to as many networks as needed:
+# Deploy to Origin (e.g., Arbitrum Sepolia)
 bunx hardhat run scripts/deploy.ts --network arbitrumSepolia --profile production
+
+# Deploy to Remote (e.g., Optimism Sepolia, Sepolia)
 bunx hardhat run scripts/deploy.ts --network optimismSepolia --profile production
 bunx hardhat run scripts/deploy.ts --network sepolia --profile production
 ```
@@ -55,49 +62,39 @@ bunx hardhat run scripts/setPeer.ts --network optimismSepolia
 bunx hardhat run scripts/setPeer.ts --network sepolia
 ```
 
-> **Note:** Each chain needs to know about all its peers. Run `setPeer` once per deployed chain.
+### 3. Fund Origin Contract
+**Crucial**: The `PayableONFT` contract on the **Origin Chain** must have native tokens (ETH) to pay for the gas of bridging NFTs back to remote users.
+-   Send some ETH (e.g., 0.1 ETH) to the deployed `PayableONFT` address on the **Origin Chain**.
 
 ## Usage
 
-### Minting (Local Chain)
-Mint an NFT on the current chain:
+### Minting (on Origin Chain)
+Minting on the Origin Chain is instant and local.
 ```bash
 bunx hardhat run scripts/mint.ts --network arbitrumSepolia
 ```
 
-### Minting & Bridging (Cross-Chain)
-Mint and bridge to any connected chain using the `DESTINATION` env var:
+### Minting (from Remote Chain)
+Minting from a remote chain sends a request to Origin.
 ```bash
-# Mint on Arbitrum, bridge to Optimism:
-DESTINATION=optimismSepolia bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
-
-# Mint on Arbitrum, bridge to Sepolia:
-DESTINATION=sepolia bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
-
-# Mint on Optimism, bridge to Arbitrum:
-DESTINATION=arbitrumSepolia bunx hardhat run scripts/mintAndBridge.ts --network optimismSepolia
+# Mint on Optimism (Remote), receive NFT on Optimism (bridged from Arbitrum)
+bunx hardhat run scripts/mint.ts --network optimismSepolia
 ```
+*Note: The `mintAndBridge` script is no longer the primary method for this architecture, as `mint()` handles cross-chain requests automatically on remote chains.*
 
 ## Adding a New Network
 
 To add support for a new chain (e.g., Base Sepolia):
 
-1.  **`scripts/constants.ts`** — Add entries to `LZ_ENDPOINTS`, `LZ_EIDS`, `USDC_ADDRESSES`, `CHAIN_IDS`
-2.  **`hardhat.config.ts`** — Add a new network entry
-3.  **`.env`** — Add the RPC URL (e.g., `BASE_SEPOLIA_RPC_URL=...`)
-4.  **`deployments.json`** — Add `"baseSepolia": ""`
+1.  **`scripts/constants.ts`** — Add entries to `LZ_ENDPOINTS`, `LZ_EIDS`, `USDC_ADDRESSES`, `CHAIN_IDS`.
+2.  **`hardhat.config.ts`** — Add a new network entry.
+3.  **`.env`** — Add the RPC URL.
+4.  **`deployments.json`** — Add `"baseSepolia": ""`.
 5.  **Deploy & Peer**:
     ```bash
     bunx hardhat run scripts/deploy.ts --network baseSepolia --profile production
-    # Then re-run setPeer on ALL chains (including the new one):
+    # Then re-run setPeer on ALL chains:
     bunx hardhat run scripts/setPeer.ts --network baseSepolia
     bunx hardhat run scripts/setPeer.ts --network arbitrumSepolia
-    bunx hardhat run scripts/setPeer.ts --network optimismSepolia
+    # ... etc
     ```
-
-## Troubleshooting
-
--   **Contract too large**: Ensure you use `--profile production` to enable the optimizer.
--   **NotEnoughNative**: Ensure you send enough ETH in `value` for the cross-chain fee (the script handles this).
--   **NoPeer**: Ensure you ran `setPeer.ts` on ALL chains, not just one.
--   **No deployment found**: Run `deploy.ts` on that network first. Addresses are stored in `deployments.json`.

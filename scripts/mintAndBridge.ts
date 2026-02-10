@@ -24,6 +24,10 @@ async function main() {
     // Read contract address from deployments.json
     const onftAddress = getDeployedAddress(networkName);
 
+    console.warn("⚠️  WARNING: mintAndBridge is deprecated in Centralized Minting architecture.");
+    console.warn("   Use 'mint.ts' instead. It automatically handles cross-chain requests.");
+    console.warn("   This script only works on the Origin Chain.");
+
     // Get destination from env
     const dstNetwork = process.env.DESTINATION as NetworkName | undefined;
 

@@ -40,6 +40,9 @@ export const CHAIN_IDS = {
 
 export type NetworkName = keyof typeof LZ_ENDPOINTS;
 
+// The network that hosts the central minting logic
+export const ORIGIN_NETWORK: NetworkName = "arbitrumSepolia";
+
 // ============================================================
 // Deployment Registry Helpers
 // ============================================================
