@@ -1,57 +1,103 @@
-# Sample Hardhat 3 Beta Project (`node:test` and `viem`)
+# PayableONFT Deployment Guide
 
-This project showcases a Hardhat 3 Beta project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
+## Contract Overview
+`PayableONFT` is an Omnichain NFT (ONFT) contract built on LayerZero V2 that allows users to mint NFTs by paying with USDC. It supports cross-chain functionality, enabling users to mint on one chain and bridge to **any connected chain** in a single transaction.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+### Key Features
+- **USDC Payment**: Users pay 10 USDC(default) to mint an NFT.
+- **Multi-Chain**: Deploy to as many networks as needed. Add new networks at any time.
+- **Cross-Chain Minting**: `mintAndBridge` function mints locally and transfers to any destination chain.
+- **Pausable**: Admin can pause minting in case of emergencies.
+- **Collision Prevention**: Uses a chain-specific prefix for token IDs to ensure uniqueness across chains.
+- **Owner Controls**: Admin can withdraw collected USDC and update the USDC token address.
 
-## Project Overview
+## Prerequisites
 
-This example project includes:
+1.  **Node.js**: v18+ recommended (v22+ required for Hardhat 3).
+2.  **Bun**: Used as the package manager.
+3.  **Wallet**: Private key with native gas (ETH/SepoliaETH) and testnet USDC on deployment chains.
+4.  **RPC URLs**: Endpoints for each network you plan to deploy to.
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+## Setup
+
+1.  **Install Dependencies**:
+    ```bash
+    bun install
+    ```
+
+2.  **Environment Variables**:
+    Create a `.env` file in the root directory:
+    ```ini
+    PRIVATE_KEY=your_private_key_here
+    ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+    OPTIMISM_SEPOLIA_RPC_URL=https://sepolia.optimism.io
+    SEPOLIA_RPC_URL=https://rpc.ankr.com/eth_sepolia
+    ```
+
+## Deployment Steps
+
+Deploy the contract to **each network** you want to support. You can start with 2 and add more later.
+
+### 1. Deploy to Each Network
+```bash
+# Deploy to as many networks as needed:
+bunx hardhat run scripts/deploy.ts --network arbitrumSepolia --profile production
+bunx hardhat run scripts/deploy.ts --network optimismSepolia --profile production
+bunx hardhat run scripts/deploy.ts --network sepolia --profile production
+```
+Each deployment auto-saves the contract address to `deployments.json`.
+
+### 2. Connect All Networks (Set Peers)
+After deploying to all desired chains, run `setPeer` on **each chain**. The script automatically connects to all other deployed chains:
+```bash
+bunx hardhat run scripts/setPeer.ts --network arbitrumSepolia
+bunx hardhat run scripts/setPeer.ts --network optimismSepolia
+bunx hardhat run scripts/setPeer.ts --network sepolia
+```
+
+> **Note:** Each chain needs to know about all its peers. Run `setPeer` once per deployed chain.
 
 ## Usage
 
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
-npx hardhat test
+### Minting (Local Chain)
+Mint an NFT on the current chain:
+```bash
+bunx hardhat run scripts/mint.ts --network arbitrumSepolia
 ```
 
-You can also selectively run the Solidity or `node:test` tests:
+### Minting & Bridging (Cross-Chain)
+Mint and bridge to any connected chain using the `DESTINATION` env var:
+```bash
+# Mint on Arbitrum, bridge to Optimism:
+DESTINATION=optimismSepolia bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
 
-```shell
-npx hardhat test solidity
-npx hardhat test nodejs
+# Mint on Arbitrum, bridge to Sepolia:
+DESTINATION=sepolia bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
+
+# Mint on Optimism, bridge to Arbitrum:
+DESTINATION=arbitrumSepolia bunx hardhat run scripts/mintAndBridge.ts --network optimismSepolia
 ```
 
-### Make a deployment to Sepolia
+## Adding a New Network
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+To add support for a new chain (e.g., Base Sepolia):
 
-To run the deployment to a local chain:
+1.  **`scripts/constants.ts`** — Add entries to `LZ_ENDPOINTS`, `LZ_EIDS`, `USDC_ADDRESSES`, `CHAIN_IDS`
+2.  **`hardhat.config.ts`** — Add a new network entry
+3.  **`.env`** — Add the RPC URL (e.g., `BASE_SEPOLIA_RPC_URL=...`)
+4.  **`deployments.json`** — Add `"baseSepolia": ""`
+5.  **Deploy & Peer**:
+    ```bash
+    bunx hardhat run scripts/deploy.ts --network baseSepolia --profile production
+    # Then re-run setPeer on ALL chains (including the new one):
+    bunx hardhat run scripts/setPeer.ts --network baseSepolia
+    bunx hardhat run scripts/setPeer.ts --network arbitrumSepolia
+    bunx hardhat run scripts/setPeer.ts --network optimismSepolia
+    ```
 
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
-```
+## Troubleshooting
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
-
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
-
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
-```
-
-After setting the variable, you can run the deployment with the Sepolia network:
-
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+-   **Contract too large**: Ensure you use `--profile production` to enable the optimizer.
+-   **NotEnoughNative**: Ensure you send enough ETH in `value` for the cross-chain fee (the script handles this).
+-   **NoPeer**: Ensure you ran `setPeer.ts` on ALL chains, not just one.
+-   **No deployment found**: Run `deploy.ts` on that network first. Addresses are stored in `deployments.json`.

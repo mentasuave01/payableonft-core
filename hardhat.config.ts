@@ -36,6 +36,14 @@ export default defineConfig({
       },
     },
   },
+  // ============================================================
+  // Networks
+  // To add a new network:
+  //   1. Add RPC URL to .env (e.g., BASE_SEPOLIA_RPC_URL=...)
+  //   2. Add network entry below
+  //   3. Add LZ_ENDPOINTS, LZ_EIDS, USDC_ADDRESSES, CHAIN_IDS entries in scripts/constants.ts
+  //   4. Add empty entry in deployments.json
+  // ============================================================
   networks: {
     hardhatMainnet: {
       type: "edr-simulated",

@@ -1,42 +1,65 @@
 import { network } from "hardhat";
 import { erc20Abi, parseUnits } from "viem";
 import { Options } from "@layerzerolabs/lz-v2-utilities";
-import { LZ_EIDS, type NetworkName } from "./constants.js";
+import { LZ_EIDS, type NetworkName, getDeployedAddress, getDeployedNetworks } from "./constants.js";
 
 /**
  * Mint an NFT and bridge it to another chain in one transaction.
  * User pays USDC on current chain and receives NFT on destination chain.
- * 
+ *
  * Usage:
- *   bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
+ *   DESTINATION=optimismSepolia bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
+ *   DESTINATION=sepolia bunx hardhat run scripts/mintAndBridge.ts --network arbitrumSepolia
+ *
+ * Environment variables:
+ *   DESTINATION - The target network name to bridge the NFT to (required)
  */
 
-// Update with your deployed contract address
-const ONFT_ADDRESS: `0x${string}` = "0x0000000000000000000000000000000000000000";
 const MINT_PRICE = parseUnits("10", 6); // 10 USDC
 
 async function main() {
     const { viem } = await network.connect();
     const networkName = network.name as NetworkName;
 
-    if (ONFT_ADDRESS === "0x0000000000000000000000000000000000000000") {
-        throw new Error("Set ONFT_ADDRESS in this script first");
+    // Read contract address from deployments.json
+    const onftAddress = getDeployedAddress(networkName);
+
+    // Get destination from env
+    const dstNetwork = process.env.DESTINATION as NetworkName | undefined;
+
+    if (!dstNetwork) {
+        const deployed = getDeployedNetworks().filter(d => d.network !== networkName);
+        console.log("❌ Missing DESTINATION env var. Available destinations:");
+        for (const d of deployed) {
+            console.log(`  DESTINATION=${d.network} bunx hardhat run scripts/mintAndBridge.ts --network ${networkName}`);
+        }
+        if (deployed.length === 0) {
+            console.log("  (no other networks deployed yet)");
+        }
+        process.exitCode = 1;
+        return;
     }
 
-    // Determine destination chain
-    const dstNetwork = networkName === "arbitrumSepolia" ? "optimismSepolia" : "arbitrumSepolia";
-    const dstEid = LZ_EIDS[dstNetwork as NetworkName];
+    if (!(dstNetwork in LZ_EIDS)) {
+        throw new Error(`Destination "${dstNetwork}" not found in LZ_EIDS. Check constants.ts`);
+    }
+
+    // Verify destination is deployed
+    const dstAddress = getDeployedAddress(dstNetwork);
+    const dstEid = LZ_EIDS[dstNetwork];
 
     const publicClient = await viem.getPublicClient();
     const [wallet] = await viem.getWalletClients();
 
     console.log("=== Mint and Bridge ===");
     console.log("Source chain:", networkName);
+    console.log("Source contract:", onftAddress);
     console.log("Destination chain:", dstNetwork);
+    console.log("Destination contract:", dstAddress);
     console.log("Destination EID:", dstEid);
     console.log("Wallet:", wallet.account.address);
 
-    const onft = await viem.getContractAt("PayableONFT", ONFT_ADDRESS);
+    const onft = await viem.getContractAt("PayableONFT", onftAddress);
     const usdcAddress = await onft.read.usdc();
 
     // Step 1: Build LayerZero options
@@ -73,7 +96,7 @@ async function main() {
         address: usdcAddress,
         abi: erc20Abi,
         functionName: "approve",
-        args: [ONFT_ADDRESS, MINT_PRICE],
+        args: [onftAddress, MINT_PRICE],
     });
     console.log("Approval tx:", approveHash);
     await publicClient.waitForTransactionReceipt({ hash: approveHash });
