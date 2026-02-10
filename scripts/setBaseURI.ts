@@ -10,8 +10,7 @@ import { getDeployedAddress } from "./constants.js";
  */
 
 async function main() {
-    const { viem } = await network.connect();
-    const networkName = network.name;
+    const { viem, networkName } = await network.connect();
 
     // Get the Base URI from environment variable
     const baseURI = process.env.BASE_URI;

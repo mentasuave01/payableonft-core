@@ -18,8 +18,7 @@ import { LZ_EIDS, type NetworkName, getDeployedAddress, getDeployedNetworks } fr
 const MINT_PRICE = parseUnits("10", 6); // 10 USDC
 
 async function main() {
-    const { viem } = await network.connect();
-    const networkName = network.name as NetworkName;
+    const { viem, networkName } = await network.connect();
 
     // Read contract address from deployments.json
     const onftAddress = getDeployedAddress(networkName);

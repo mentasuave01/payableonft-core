@@ -10,8 +10,7 @@ import { type NetworkName, getDeployedAddress } from "./constants.js";
  */
 
 async function main() {
-    const { viem } = await network.connect();
-    const networkName = network.name as NetworkName;
+    const { viem, networkName } = await network.connect();
 
     // Get the PayableONFT address for this network
     const onftAddress = getDeployedAddress(networkName);

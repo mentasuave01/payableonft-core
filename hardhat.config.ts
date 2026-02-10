@@ -4,6 +4,7 @@ import { configVariable, defineConfig } from "hardhat/config";
 
 export default defineConfig({
   plugins: [hardhatToolboxViemPlugin],
+  defaultNetwork: "hardhatMainnet",
   solidity: {
     profiles: {
       default: {
@@ -49,6 +50,11 @@ export default defineConfig({
       type: "edr-simulated",
       chainType: "l1",
     },
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      chainType: "l1",
+      // accounts: hardhat default accounts are used automatically by hardhat
+    },
     hardhatOp: {
       type: "edr-simulated",
       chainType: "op",
@@ -71,6 +77,27 @@ export default defineConfig({
       chainType: "op",
       chainId: 11155420,
       url: configVariable("OPTIMISM_SEPOLIA_RPC_URL"),
+      accounts: [configVariable("PRIVATE_KEY")],
+    },
+    arbitrumMainnet: {
+      type: "http",
+      chainType: "l1",
+      chainId: 42161,
+      url: configVariable("ARBITRUM_RPC_URL"),
+      accounts: [configVariable("PRIVATE_KEY")],
+    },
+    optimismMainnet: {
+      type: "http",
+      chainType: "op",
+      chainId: 10,
+      url: configVariable("OPTIMISM_RPC_URL"),
+      accounts: [configVariable("PRIVATE_KEY")],
+    },
+    baseMainnet: {
+      type: "http",
+      chainType: "op",
+      chainId: 8453,
+      url: configVariable("BASE_RPC_URL"),
       accounts: [configVariable("PRIVATE_KEY")],
     },
   },

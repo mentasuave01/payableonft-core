@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { arbitrum } from "viem/chains";
 
 // ============================================================
 // Network Configuration
@@ -12,36 +13,45 @@ import { resolve } from "node:path";
 
 // LayerZero V2 Endpoint addresses (same on most testnets)
 export const LZ_ENDPOINTS = {
-    arbitrumSepolia: "0x6EDCE65403992e310A62460808c4b910D972f10f",
-    optimismSepolia: "0x6EDCE65403992e310A62460808c4b910D972f10f",
-    sepolia: "0x6EDCE65403992e310A62460808c4b910D972f10f",
+    arbitrumMainnet: "0x1a44076050125825900e736c501f859c50fE728c",
+    optimismMainnet: "0x1a44076050125825900e736c501f859c50fE728c",
+    baseMainnet: "0x1a44076050125825900e736c501f859c50fE728c",
+    hardhatMainnet: "0x6EDCE65403992e310A62460808c4b910D972f10f", // Mock EndpointV2
+    localhost: "0x6EDCE65403992e310A62460808c4b910D972f10f", // Mock EndpointV2
+
 } as const;
 
 // LayerZero Endpoint IDs (EIDs)
 export const LZ_EIDS = {
-    arbitrumSepolia: 40231,
-    optimismSepolia: 40232,
-    sepolia: 40161,
+    arbitrumMainnet: 30110,
+    optimismMainnet: 30111,
+    baseMainnet: 30184,
+    hardhatMainnet: 40161,
+    localhost: 40161,
 } as const;
 
 // USDC testnet addresses (Circle Testnet USDC)
 export const USDC_ADDRESSES = {
-    arbitrumSepolia: "0x75faf114eafb1BDbe2F031385358e18504701200",
-    optimismSepolia: "0x5fd84259d66Cd46123540766Be93DFE6D43130D7",
-    sepolia: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    arbitrumMainnet: "0x75faf114eafb1BDbe2F031385358e18504701200",
+    optimismMainnet: "0x5fd84259d66Cd46123540766Be93DFE6D43130D7",
+    baseMainnet: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    hardhatMainnet: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+    localhost: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
 } as const;
 
 // Chain IDs
 export const CHAIN_IDS = {
-    arbitrumSepolia: 421614,
-    optimismSepolia: 11155420,
-    sepolia: 11155111,
+    arbitrumMainnet: 42161,
+    optimismMainnet: 10,
+    baseMainnet: 8453,
+    hardhatMainnet: 31337,
+    localhost: 31337,
 } as const;
 
 export type NetworkName = keyof typeof LZ_ENDPOINTS;
 
 // The network that hosts the central minting logic
-export const ORIGIN_NETWORK: NetworkName = "arbitrumSepolia";
+export const ORIGIN_NETWORK: NetworkName = "arbitrumMainnet";
 
 // ============================================================
 // Deployment Registry Helpers

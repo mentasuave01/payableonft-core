@@ -13,8 +13,7 @@ import { getDeployedAddress } from "./constants.js";
 const MINT_PRICE = parseUnits("10", 6); // 10 USDC
 
 async function main() {
-    const { viem } = await network.connect();
-    const networkName = network.name;
+    const { viem, networkName } = await network.connect();
 
     // Read contract address from deployments.json
     const onftAddress = getDeployedAddress(networkName);

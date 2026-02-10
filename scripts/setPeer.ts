@@ -14,8 +14,7 @@ import { pad } from "viem";
  */
 
 async function main() {
-    const { viem } = await network.connect();
-    const networkName = network.name as NetworkName;
+    const { viem, networkName } = await network.connect();
 
     if (!(networkName in LZ_EIDS)) {
         throw new Error(`Network ${networkName} not configured in LZ_EIDS`);

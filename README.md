@@ -30,7 +30,7 @@
     PRIVATE_KEY=your_private_key_here
     ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
     OPTIMISM_SEPOLIA_RPC_URL=https://sepolia.optimism.io
-    SEPOLIA_RPC_URL=https://rpc.ankr.com/eth_sepolia
+    SEPOLIA_RPC_URL=https://rpc.ankr.com/eth_sepolia    
     ```
 
 3.  **Configure Origin Chain**:

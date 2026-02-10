@@ -24,7 +24,7 @@ contract PayableONFT is ONFT721, Pausable {
 
     uint256 public nextTokenId;
     /// @notice Price to mint one NFT (in USDC, 6 decimals)
-    uint256 public constant MINT_PRICE = 10 * 10 ** 6; // 10 USDC
+    uint256 public constant MINT_PRICE = 10 * 10 ** 6; // 1 USDC
     IERC20 public usdc;
 
     /// @notice Origin Chain Endpoint ID where all tokens are minted and logic is centralized

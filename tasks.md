@@ -1,0 +1,4 @@
+base mainnet local
+arbitrum mainnet peer
+optimism mainnet peer
+devWallet 0xc912d3afD931Da3C753b8D415e9768B6C0B19939

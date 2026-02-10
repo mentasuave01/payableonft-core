@@ -2,8 +2,7 @@ import { network } from "hardhat";
 import { LZ_ENDPOINTS, LZ_EIDS, USDC_ADDRESSES, ORIGIN_NETWORK, type NetworkName, saveDeployment, getDeployedNetworks } from "./constants.js";
 
 async function main() {
-    const { viem } = await network.connect();
-    const networkName = network.name as NetworkName;
+    const { viem, networkName } = await network.connect();
 
     if (!(networkName in LZ_ENDPOINTS)) {
         throw new Error(`Network ${networkName} not configured. Add it to constants.ts first.`);
@@ -16,11 +15,28 @@ async function main() {
     console.log("Network:", networkName);
     console.log("Chain ID:", chainId);
 
-    const lzEndpoint = LZ_ENDPOINTS[networkName];
-    const usdcAddress = USDC_ADDRESSES[networkName];
-
+    let lzEndpoint = LZ_ENDPOINTS[networkName];
+    let usdcAddress = USDC_ADDRESSES[networkName];
     // Origin EID - all deployments must agree on this
-    const originEid = LZ_EIDS[ORIGIN_NETWORK];
+    let originEid = LZ_EIDS[ORIGIN_NETWORK];
+
+    // If on hardhatMainnet, deploy mocks first
+    if (networkName === "hardhatMainnet") {
+        console.log("\n⚠️  Network is hardhatMainnet. Deploying mocks...");
+
+        const mockEndpoint = await viem.deployContract("MockLzEndpoint", [LZ_EIDS[networkName]]);
+        lzEndpoint = mockEndpoint.address;
+        console.log("Mock Endpoint deployed at:", lzEndpoint);
+
+        const mockUsdc = await viem.deployContract("MockUSDC");
+        usdcAddress = mockUsdc.address;
+        console.log("Mock USDC deployed at:", usdcAddress);
+
+        // For local testing, we assume this IS the origin chain
+        originEid = LZ_EIDS[networkName];
+        console.log("Set Origin EID to Local:", originEid);
+        console.log("------------------------------------------------------------\n");
+    }
 
     console.log("LayerZero Endpoint:", lzEndpoint);
     console.log("USDC Address:", usdcAddress);
