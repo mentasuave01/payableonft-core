@@ -404,6 +404,57 @@ describe("PayableONFT", async function () {
         });
     });
 
+    describe("Metadata", () => {
+        it("Should allow owner to set base URI", async () => {
+            const baseURI = "https://api.example.com/metadata/";
+            await owner.writeContract({
+                address: payableOnft.address,
+                abi: payableOnft.abi,
+                functionName: "setBaseURI",
+                args: [baseURI],
+            });
+
+
+
+            // Mint a token to check tokenURI
+            await user1.writeContract({
+                address: mockUsdc.address,
+                abi: mockUsdc.abi,
+                functionName: "approve",
+                args: [payableOnft.address, MINT_PRICE],
+            });
+            const extraOptions = "0x";
+            const fee = await payableOnft.read.quoteMint([extraOptions]);
+            await user1.writeContract({
+                address: payableOnft.address,
+                abi: payableOnft.abi,
+                functionName: "mint",
+                args: [extraOptions],
+                value: fee.nativeFee
+            });
+
+            const tokenId = await payableOnft.read.nextTokenId() - 1n;
+            const tokenURI = await payableOnft.read.tokenURI([tokenId]);
+            assert.equal(tokenURI, `${baseURI}${tokenId}`);
+            console.log(`✅ Token URI for #${tokenId}: ${tokenURI}`);
+        });
+
+        it("Should fail if non-owner tries to set base URI", async () => {
+            try {
+                await user1.writeContract({
+                    address: payableOnft.address,
+                    abi: payableOnft.abi,
+                    functionName: "setBaseURI",
+                    args: ["https://hacker.com/"],
+                });
+                assert.fail("Should have reverted");
+            } catch (error: any) {
+                assert.ok(error.message.includes("OwnableUnauthorizedAccount") || error.message.includes("reverted"), "Should revert");
+                console.log("✅ Non-owner cannot set base URI");
+            }
+        });
+    });
+
     // describe("Token ID Collision Prevention", () => {
     //     it("Should use chain prefix for token IDs", async () => {
     //         const expectedPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
