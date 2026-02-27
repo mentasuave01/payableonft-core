@@ -52,7 +52,7 @@ export const CHAIN_IDS: Record<string, number> = {
 export type NetworkName = keyof typeof LZ_ENDPOINTS;
 
 // IMPORTANT: The network that hosts the central minting logic 
-export const ORIGIN_NETWORK: NetworkName = "arbitrumMainnet";
+export const ORIGIN_NETWORK: NetworkName = "baseMainnet";
 
 // ============================================================
 // Deployment Registry Helpers

@@ -19,5 +19,6 @@
 # Hardhat test reports, deployments, and coverage
 /coverage
 .env
-deployments.json
-mock-deployments.json
+#optional 
+#deployments.json
+#mock-deployments.json
