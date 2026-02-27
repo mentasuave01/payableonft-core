@@ -1,9 +1,10 @@
 import "dotenv/config";
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
+import hardhatVerify from "@nomicfoundation/hardhat-verify";
 import { configVariable, defineConfig } from "hardhat/config";
 
 export default defineConfig({
-  plugins: [hardhatToolboxViemPlugin],
+  plugins: [hardhatToolboxViemPlugin, hardhatVerify],
   defaultNetwork: "hardhatMainnet",
   solidity: {
     profiles: {
@@ -59,26 +60,26 @@ export default defineConfig({
       type: "edr-simulated",
       chainType: "op",
     },
-    sepolia: {
-      type: "http",
-      chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("PRIVATE_KEY")],
-    },
-    arbitrumSepolia: {
-      type: "http",
-      chainType: "l1",
-      chainId: 421614,
-      url: configVariable("ARBITRUM_SEPOLIA_RPC_URL"),
-      accounts: [configVariable("PRIVATE_KEY")],
-    },
-    optimismSepolia: {
-      type: "http",
-      chainType: "op",
-      chainId: 11155420,
-      url: configVariable("OPTIMISM_SEPOLIA_RPC_URL"),
-      accounts: [configVariable("PRIVATE_KEY")],
-    },
+    // sepolia: {
+    //   type: "http",
+    //   chainType: "l1",
+    //   url: configVariable("SEPOLIA_RPC_URL"),
+    //   accounts: [configVariable("PRIVATE_KEY")],
+    // },
+    // arbitrumSepolia: {
+    //   type: "http",
+    //   chainType: "l1",
+    //   chainId: 421614,
+    //   url: configVariable("ARBITRUM_SEPOLIA_RPC_URL"),
+    //   accounts: [configVariable("PRIVATE_KEY")],
+    // },
+    // optimismSepolia: {
+    //   type: "http",
+    //   chainType: "op",
+    //   chainId: 11155420,
+    //   url: configVariable("OPTIMISM_SEPOLIA_RPC_URL"),
+    //   accounts: [configVariable("PRIVATE_KEY")],
+    // },
     arbitrumMainnet: {
       type: "http",
       chainType: "l1",
@@ -99,6 +100,11 @@ export default defineConfig({
       chainId: 8453,
       url: configVariable("BASE_RPC_URL"),
       accounts: [configVariable("PRIVATE_KEY")],
+    },
+  },
+  verify: {
+    etherscan: {
+      apiKey: configVariable("ETHERSCAN_API_KEY"),
     },
   },
 });

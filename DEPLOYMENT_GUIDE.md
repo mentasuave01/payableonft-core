@@ -1,6 +1,7 @@
-# PayableONFT Deployment Guide
+# PayableONFT Deployment Guide — Lazy Bridge Architecture
 
-This guide walks through the process of deploying, configuring, and verifying the `PayableONFT` system.
+This guide walks through deploying, configuring, and verifying the `PayableONFT` system.
+With the Lazy Bridge architecture, cross-chain mints use a single lightweight LZ message (20 bytes). NFTs are minted on Origin and users bridge them later on-demand.
 
 ## Prerequisites
 
@@ -24,25 +25,51 @@ Before deploying to testnets, verify the contracts locally using Hardhat and the
 bunx hardhat test
 ```
 
-This runs the `test/PayableONFT.ts` suite, which covers:
-- Deployment
-- Minting (with USDC payment)
-- Cross-chain bridging (mocked)
+This runs the test suites, which cover:
+- Local minting on Origin (with USDC payment)
+- Cross-chain mint requests (lightweight 20-byte LZ message)
+- E2E cross-chain simulation (message delivery → NFT minted on Origin)
+- Bridge quoting
 - Metadata (Base URI)
 - Admin functions (withdraw, pause)
 
+
 ## 2. Testnet Deployment
 
-Deploy the contract to your desired networks. Ensure you have funded your wallet with both **Native ETH** (for gas) and **Testnet USDC** (for minting).
+### Step 0: Setup USDC
 
-**Step 1: Deploy to Origin Chain (e.g., Arbitrum Sepolia)**
+You need USDC to pay for minting fees. For testnets, you can use the official Circle Testnet USDC (if available and you have a faucet) OR deploy a **MockUSDC** token.
+
+**Option A: Deploy & Mint MockUSDC (Recommended for Testing)**
+If you don't have testnet USDC, deploy a mock version:
+
+1. **Deploy MockUSDC:**
+   ```bash
+   bunx hardhat run scripts/deployMockUSDC.ts --network arbitrumSepolia
+   ```
+   *This saves the address to `mock-deployments.json`.*
+
+2. **Mint MockUSDC:**
+   ```bash
+   bunx hardhat run scripts/mintMockUSDC.ts --network arbitrumSepolia
+   ```
+   *This mints 1,000 MockUSDC to your wallet.*
+
+**Option B: Use Official Testnet USDC**
+If you already have official Circle USDC on the testnet, ensure it is in your wallet. The `deploy.ts` script defaults to official addresses in `constants.ts` if no mock is found.
+
+### Step 1: Deploy PayableONFT
+
+Deploy the contract to your desired networks. The script will automatically detect if you have deployed MockUSDC and use that address.
+
+**Deploy to Origin Chain (e.g., Arbitrum Sepolia)**
 ```bash
-bunx hardhat run scripts/deploy.ts --network arbitrumSepolia
+bunx hardhat run scripts/deploy.ts --network arbitrumMainnet
 ```
 
-**Step 2: Deploy to Remote Chain (e.g., Optimism Sepolia)**
+**Deploy to Remote Chain (e.g., Optimism Sepolia)**
 ```bash
-bunx hardhat run scripts/deploy.ts --network optimismSepolia
+bunx hardhat run scripts/deploy.ts --network optimismMainnet
 ```
 
 > [!NOTE]
@@ -80,10 +107,10 @@ You can use the `demo_flow.ts` script to verify the core functionality on a live
    bunx hardhat run scripts/demo_flow.ts --network localhost
    ```
 
-**For Testnet Verification:**
-Run the demo flow on the deployed network (e.g., Arbitrum Sepolia):
+**For Testnet/Mainnet Verification:**
+Run the demo flow on the deployed network:
 ```bash
-bunx hardhat run scripts/demo_flow.ts --network arbitrumSepolia
+bunx hardhat run scripts/demo_flow.ts --network arbitrumMainnet
 ```
 
 This script will:
@@ -91,6 +118,8 @@ This script will:
 2. Mint a new NFT (paying the USDC fee).
 3. Set the Base URI for metadata.
 4. Log the Token URI of the minted NFT.
+
+> **Note**: No need to fund the Origin contract with ETH. The Lazy Bridge architecture eliminates the return-trip gas cost entirely.
 
 ## 5. Metadata Visibility
 
@@ -102,6 +131,7 @@ To ensure your NFTs are visible on platforms like OpenSea (Testnet):
 
 ## Troubleshooting
 
-- **USDC Approval Failed**: Ensure you have Testnet USDC and enough ETH for gas.
+- **USDC Approval Failed**: Ensure you have USDC and enough ETH for gas.
 - **LayerZero Error**: Check that you have set peers correctly on BOTH chains using `setPeer.ts`.
 - **Invalid Token URI**: Verify the Base URI ends with a slash (`/`) if your filenames are just IDs.
+- **NFT not on my chain**: With Lazy Bridge, NFTs mint on Origin. Use the ONFT `send()` function to bridge to your preferred chain.

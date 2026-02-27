@@ -1,5 +1,8 @@
 import { network } from "hardhat";
-import { LZ_ENDPOINTS, LZ_EIDS, USDC_ADDRESSES, ORIGIN_NETWORK, type NetworkName, saveDeployment, getDeployedNetworks } from "./constants.js";
+import { LZ_ENDPOINTS, LZ_EIDS, USDC_ADDRESSES, ORIGIN_NETWORK, saveDeployment, getDeployedNetworks } from "./constants.js";
+import { Address } from "viem";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 async function main() {
     const { viem, networkName } = await network.connect();
@@ -15,22 +18,48 @@ async function main() {
     console.log("Network:", networkName);
     console.log("Chain ID:", chainId);
 
-    let lzEndpoint = LZ_ENDPOINTS[networkName];
-    let usdcAddress = USDC_ADDRESSES[networkName];
+    let lzEndpoint = LZ_ENDPOINTS[networkName] as Address
+    let usdcAddress = USDC_ADDRESSES[networkName] as Address;
+
+    // Check for mock deployment override
+    try {
+        const mockDeploymentsPath = resolve(import.meta.dirname!, "..", "mock-deployments.json");
+        const mockDeploymentsRaw = readFileSync(mockDeploymentsPath, "utf-8");
+        const mockDeployments = JSON.parse(mockDeploymentsRaw);
+        if (mockDeployments[networkName]) {
+            console.log(`\nℹ️  Using MockUSDC from mock-deployments.json: ${mockDeployments[networkName]}`);
+            usdcAddress = mockDeployments[networkName] as Address;
+        }
+    } catch (e) {
+        // Ignore if file doesn't exist or other errors
+    }
+
+    if (!usdcAddress && networkName !== "hardhatMainnet") {
+        throw new Error(`USDC Address not found for ${networkName}. Configure in constants.ts or deploy MockUSDC first.`);
+    }
+
     // Origin EID - all deployments must agree on this
     let originEid = LZ_EIDS[ORIGIN_NETWORK];
 
-    // If on hardhatMainnet, deploy mocks first
-    if (networkName === "hardhatMainnet") {
-        console.log("\n⚠️  Network is hardhatMainnet. Deploying mocks...");
+    // If on hardhatMainnet or localhost, deploy mocks first
+    if (networkName === "hardhatMainnet" || networkName === "localhost") {
+        console.log(`\n⚠️  Network is ${networkName}. Deploying mocks...`);
 
         const mockEndpoint = await viem.deployContract("MockLzEndpoint", [LZ_EIDS[networkName]]);
         lzEndpoint = mockEndpoint.address;
         console.log("Mock Endpoint deployed at:", lzEndpoint);
 
-        const mockUsdc = await viem.deployContract("MockUSDC");
-        usdcAddress = mockUsdc.address;
-        console.log("Mock USDC deployed at:", usdcAddress);
+        // Only deploy MockUSDC if we didn't find one already (e.g. from mock-deployments.json)
+        // But for consistency/simplicity in local dev, maybe we should just use the one we found?
+        // The previous logic for hardhatMainnet ALWAYS deployed a new MockUSDC.
+        // Let's check if we already have a usdcAddress (from mock-deployments or constants)
+        if (!usdcAddress) {
+            const mockUsdc = await viem.deployContract("MockUSDC");
+            usdcAddress = mockUsdc.address;
+            console.log("Mock USDC deployed at:", usdcAddress);
+        } else {
+            console.log("Using existing USDC at:", usdcAddress);
+        }
 
         // For local testing, we assume this IS the origin chain
         originEid = LZ_EIDS[networkName];
@@ -46,8 +75,8 @@ async function main() {
     console.log("Deployer:", deployer.account.address);
 
     const onft = await viem.deployContract("PayableONFT", [
-        "OmniUSDC NFT",           // name
-        "ONFT",                    // symbol
+        "ONFT TEST 2",           // name
+        "ONFTv2",                    // symbol
         lzEndpoint,                // LayerZero Endpoint V2
         deployer.account.address,  // delegate (owner)
         usdcAddress,               // USDC address

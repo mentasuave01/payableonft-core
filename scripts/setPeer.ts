@@ -15,6 +15,7 @@ import { pad } from "viem";
 
 async function main() {
     const { viem, networkName } = await network.connect();
+    const publicClient = await viem.getPublicClient();
 
     if (!(networkName in LZ_EIDS)) {
         throw new Error(`Network ${networkName} not configured in LZ_EIDS`);
@@ -46,7 +47,10 @@ async function main() {
         console.log(`    Bytes32: ${peerBytes32}`);
 
         const hash = await onft.write.setPeer([peerEid, peerBytes32]);
-        console.log(`    ✅ Tx: ${hash}\n`);
+        console.log(`    ✅ Tx: ${hash}`);
+        console.log(`       Waiting for confirmation...`);
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log(`       Confirmed!\n`);
     }
 
     console.log(`\n✅ All ${peers.length} peer(s) set successfully on ${networkName}!`);

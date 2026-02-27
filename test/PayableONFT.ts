@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it, before } from "node:test";
 import { network } from "hardhat";
-import { parseUnits, getAddress, pad, parseAbi } from "viem";
+import { parseUnits, getAddress, pad } from "viem";
 
 describe("PayableONFT", async function () {
     const { viem } = await network.connect();
     const publicClient = await viem.getPublicClient();
     const walletClients = await viem.getWalletClients();
 
-    // Use separate accounts for different roles
     const owner = walletClients[0];
     const user1 = walletClients[1];
     const user2 = walletClients[2];
@@ -35,7 +34,6 @@ describe("PayableONFT", async function () {
         console.log("MockLzEndpoint deployed:", mockEndpoint.address);
 
         // Deploy PayableONFT
-        // const chainPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
         payableOnft = await viem.deployContract("PayableONFT", [
             "OmniUSDC NFT",
             "ONFT",
@@ -46,7 +44,7 @@ describe("PayableONFT", async function () {
         ]);
         console.log("PayableONFT deployed:", payableOnft.address);
 
-        // Set up peer for cross-chain messaging (mock peer on remote chain)
+        // Set up peer for cross-chain messaging
         const remotePeer = pad(payableOnft.address as `0x${string}`, { size: 32 });
         await payableOnft.write.setPeer([REMOTE_EID, remotePeer]);
         console.log("Set peer for EID", REMOTE_EID);
@@ -77,9 +75,15 @@ describe("PayableONFT", async function () {
             const contractOwner = await payableOnft.read.owner();
             assert.equal(getAddress(contractOwner), getAddress(owner.account.address));
         });
+
+        it("Should have correct MINT_GAS_LIMIT (100k — no round-trip)", async () => {
+            const gasLimit = await payableOnft.read.MINT_GAS_LIMIT();
+            assert.equal(gasLimit, 100_000n);
+            console.log("✅ MINT_GAS_LIMIT is 100,000 (optimized, no bridgeBack)");
+        });
     });
 
-    describe("mint()", () => {
+    describe("mint() — Local (Origin Chain)", () => {
         it("Should fail without USDC approval", async () => {
             await assert.rejects(
                 async () => await user1.writeContract({
@@ -105,9 +109,10 @@ describe("PayableONFT", async function () {
             // Get balance before
             const balanceBefore = await mockUsdc.read.balanceOf([user1.account.address]);
 
-            // Quote fee
+            // Quote fee (on Origin, should be 0)
             const extraOptions = "0x";
             const fee = await payableOnft.read.quoteMint([extraOptions]);
+            assert.equal(fee.nativeFee, 0n, "On Origin, mint fee should be 0");
 
             // Mint
             await user1.writeContract({
@@ -127,11 +132,10 @@ describe("PayableONFT", async function () {
             const balanceAfter = await mockUsdc.read.balanceOf([user1.account.address]);
             assert.equal(balanceBefore - balanceAfter, MINT_PRICE);
 
-            console.log(`✅ User1 minted NFT #${tokenId}`);
+            console.log(`✅ User1 minted NFT #${tokenId} on Origin (0 LZ fee)`);
         });
 
         it("Should emit MintedAndPaid event", async () => {
-            // Approve and mint
             await user2.writeContract({
                 address: mockUsdc.address,
                 abi: mockUsdc.abi,
@@ -139,7 +143,6 @@ describe("PayableONFT", async function () {
                 args: [payableOnft.address, MINT_PRICE],
             });
 
-            // Quote fee
             const extraOptions = "0x";
             const fee = await payableOnft.read.quoteMint([extraOptions]);
 
@@ -153,24 +156,88 @@ describe("PayableONFT", async function () {
 
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-            // Check for event (MintedAndPaid)
             assert.ok(receipt.logs.length > 0, "Should emit events");
             console.log(`✅ User2 minted NFT, tx: ${hash.slice(0, 10)}...`);
         });
     });
 
-    describe("quoteBridge()", () => {
-        it("Should return a fee quote for bridging", async () => {
-            const options = "0x"; // Empty options for simple quote
+    describe("Cross-Chain Mint (Remote → Origin)", () => {
+        let remotePayableOnft: any;
+        let remoteEndpoint: any;
 
-            const fee = await payableOnft.read.quoteBridge([REMOTE_EID, options]);
+        before(async () => {
+            // Deploy a second contract that thinks it's on REMOTE_EID
+            remoteEndpoint = await viem.deployContract("MockLzEndpoint", [REMOTE_EID]) as any;
+            remotePayableOnft = await viem.deployContract("PayableONFT", [
+                "OmniUSDC NFT",
+                "ONFT",
+                remoteEndpoint.address,
+                owner.account.address,
+                mockUsdc.address,
+                LOCAL_EID, // originEid is still LOCAL_EID
+            ]) as any;
 
-            assert.ok(fee.nativeFee >= 0n, "Should return native fee");
-            console.log(`✅ Quote for bridging: ${fee.nativeFee} wei native, ${fee.lzTokenFee} lzToken`);
+            // Set peer for remote contract → origin
+            const originPeer = pad(payableOnft.address as `0x${string}`, { size: 32 });
+            await remotePayableOnft.write.setPeer([LOCAL_EID, originPeer]);
+
+            // Fund user1 with USDC for remote minting
+            await mockUsdc.write.mint([user1.account.address, parseUnits("100", 6)]);
+
+            // Set a low fee for testing
+            await remoteEndpoint.write.setNativeFee([parseUnits("0.001", 18)]);
+        });
+
+        it("Should quote a cross-chain mint fee (no NativeDrop overhead)", async () => {
+            const extraOptions = "0x";
+            const fee = await remotePayableOnft.read.quoteMint([extraOptions]);
+
+            assert.ok(fee.nativeFee > 0n, "Remote mint should have LZ fee");
+            console.log(`✅ Cross-chain mint quote: ${fee.nativeFee} wei (1 LZ message, no NativeDrop)`);
+        });
+
+        it("Should send cross-chain mint request from remote", async () => {
+            // Approve USDC
+            await user1.writeContract({
+                address: mockUsdc.address,
+                abi: mockUsdc.abi,
+                functionName: "approve",
+                args: [remotePayableOnft.address, MINT_PRICE],
+            });
+
+            const balanceBefore = await mockUsdc.read.balanceOf([user1.account.address]);
+
+            // Quote and mint
+            const extraOptions = "0x";
+            const fee = await remotePayableOnft.read.quoteMint([extraOptions]);
+
+            await user1.writeContract({
+                address: remotePayableOnft.address,
+                abi: remotePayableOnft.abi,
+                functionName: "mint",
+                args: [extraOptions],
+                value: fee.nativeFee
+            });
+
+            // USDC should be deducted on remote chain
+            const balanceAfter = await mockUsdc.read.balanceOf([user1.account.address]);
+            assert.equal(balanceBefore - balanceAfter, MINT_PRICE);
+
+            console.log("✅ Cross-chain mint request sent (USDC paid on remote)");
+            console.log("   NFT will be minted on Origin once LZ delivers the message");
         });
     });
 
-    describe("setUSDC() - Admin", () => {
+    describe("quoteBridge()", () => {
+        it("Should return a fee quote for bridging", async () => {
+            const options = "0x";
+            const fee = await payableOnft.read.quoteBridge([REMOTE_EID, options]);
+            assert.ok(fee.nativeFee >= 0n, "Should return native fee");
+            console.log(`✅ Quote for bridging: ${fee.nativeFee} wei native`);
+        });
+    });
+
+    describe("setUSDC() — Admin", () => {
         it("Should fail if called by non-owner", async () => {
             try {
                 await user1.writeContract({
@@ -187,7 +254,7 @@ describe("PayableONFT", async function () {
         });
 
         it("Should allow owner to set new USDC address", async () => {
-            const newUsdcAddress = user2.account.address; // Just for testing
+            const newUsdcAddress = user2.account.address;
 
             await owner.writeContract({
                 address: payableOnft.address,
@@ -199,7 +266,7 @@ describe("PayableONFT", async function () {
             const currentUsdc = await payableOnft.read.usdc();
             assert.equal(getAddress(currentUsdc), getAddress(newUsdcAddress));
 
-            // Reset back to original
+            // Reset
             await owner.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
@@ -210,7 +277,7 @@ describe("PayableONFT", async function () {
         });
     });
 
-    describe("withdrawUSDC() - Admin", () => {
+    describe("withdrawUSDC() — Admin", () => {
         it("Should fail if called by non-owner", async () => {
             try {
                 await user1.writeContract({
@@ -226,18 +293,15 @@ describe("PayableONFT", async function () {
         });
 
         it("Should allow owner to withdraw collected USDC", async () => {
-            // Check contract balance (should have USDC from mints)
             const contractBalance = await mockUsdc.read.balanceOf([payableOnft.address]);
             const ownerBalanceBefore = await mockUsdc.read.balanceOf([owner.account.address]);
 
-            // Withdraw
             await owner.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
                 functionName: "withdrawUSDC",
             });
 
-            // Check balances after
             const contractBalanceAfter = await mockUsdc.read.balanceOf([payableOnft.address]);
             const ownerBalanceAfter = await mockUsdc.read.balanceOf([owner.account.address]);
 
@@ -248,70 +312,8 @@ describe("PayableONFT", async function () {
         });
     });
 
-    describe("mintAndBridge()", () => {
-        it("Should mint and prepare bridge to destination chain", async () => {
-            // Approve USDC (user1 still has funds from initial minting)
-            await user1.writeContract({
-                address: mockUsdc.address,
-                abi: mockUsdc.abi,
-                functionName: "approve",
-                args: [payableOnft.address, MINT_PRICE],
-            });
-
-            // Get fee quote
-            const options = "0x";
-            const fee = await payableOnft.read.quoteBridge([REMOTE_EID, options]);
-
-            const balanceBefore = await mockUsdc.read.balanceOf([user1.account.address]);
-
-            const hash = await user1.writeContract({
-                address: payableOnft.address,
-                abi: payableOnft.abi,
-                functionName: "mintAndBridge",
-                args: [REMOTE_EID, options],
-                value: parseUnits("0.1", 18), // Use 0.1 ETH to ensure enough for mock endpoint
-            });
-
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-            // Check USDC was deducted
-            const balanceAfter = await mockUsdc.read.balanceOf([user1.account.address]);
-            assert.equal(balanceBefore - balanceAfter, MINT_PRICE);
-
-            // Transaction should succeed (NFT was minted and bridge message sent)
-            assert.ok(receipt.status === "success", "Transaction should succeed");
-
-            console.log(`✅ User1 minted and bridged NFT to EID ${REMOTE_EID}`);
-        });
-
-        it("Should fail without USDC approval", async () => {
-            // Clear any existing approval for user2
-            await user2.writeContract({
-                address: mockUsdc.address,
-                abi: mockUsdc.abi,
-                functionName: "approve",
-                args: [payableOnft.address, 0n],
-            });
-
-            try {
-                await user2.writeContract({
-                    address: payableOnft.address,
-                    abi: payableOnft.abi,
-                    functionName: "mintAndBridge",
-                    args: [REMOTE_EID, "0x"],
-                    value: parseUnits("0.1", 18),
-                });
-                assert.fail("Should have reverted");
-            } catch (error: any) {
-                assert.ok(error.message.includes("ERC20InsufficientAllowance") || error.message.includes("reverted"), "Should revert");
-                console.log("✅ Correctly rejects mint without USDC approval");
-            }
-        });
-    });
-
     describe("Pausable Functionality", () => {
         it("Should allow owner to pause and unpause", async () => {
-            // Pause
             await owner.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
@@ -322,7 +324,6 @@ describe("PayableONFT", async function () {
             assert.equal(isPaused, true);
             console.log("✅ Contract paused");
 
-            // Unpause
             await owner.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
@@ -334,7 +335,7 @@ describe("PayableONFT", async function () {
             console.log("✅ Contract unpaused");
         });
 
-        it("Should fail if non-owner tries to pause/unpause", async () => {
+        it("Should fail if non-owner tries to pause", async () => {
             try {
                 await user1.writeContract({
                     address: payableOnft.address,
@@ -349,14 +350,12 @@ describe("PayableONFT", async function () {
         });
 
         it("Should prevent minting when paused", async () => {
-            // Pause
             await owner.writeContract({
                 address: payableOnft.address,
                 abi: payableOnft.abi,
                 functionName: "pause",
             });
 
-            // Approve USDC for mint
             await user1.writeContract({
                 address: mockUsdc.address,
                 abi: mockUsdc.abi,
@@ -364,7 +363,6 @@ describe("PayableONFT", async function () {
                 args: [payableOnft.address, MINT_PRICE],
             });
 
-            // Try to mint
             try {
                 const extraOptions = "0x";
                 await user1.writeContract({
@@ -372,27 +370,13 @@ describe("PayableONFT", async function () {
                     abi: payableOnft.abi,
                     functionName: "mint",
                     args: [extraOptions],
-                    value: 0n // Value doesn't matter as it should revert before checks
+                    value: 0n
                 });
                 assert.fail("Should have reverted");
             } catch (error: any) {
-                assert.ok(error.message.includes("EnforcedPause") || error.message.includes("reverted"), "Should revert due to pause");
+                const message = error.message || "";
+                assert.ok(message.includes("EnforcedPause") || message.includes("reverted"), "Should revert due to pause");
                 console.log("✅ Minting blocked when paused");
-            }
-
-            // Try to mintAndBridge
-            try {
-                await user1.writeContract({
-                    address: payableOnft.address,
-                    abi: payableOnft.abi,
-                    functionName: "mintAndBridge",
-                    args: [REMOTE_EID, "0x"],
-                    value: parseUnits("0.1", 18),
-                });
-                assert.fail("Should have reverted");
-            } catch (error: any) {
-                assert.ok(error.message.includes("EnforcedPause") || error.message.includes("reverted"), "Should revert due to pause");
-                console.log("✅ MintAndBridge blocked when paused");
             }
 
             // Unpause for future tests
@@ -414,9 +398,6 @@ describe("PayableONFT", async function () {
                 args: [baseURI],
             });
 
-
-
-            // Mint a token to check tokenURI
             await user1.writeContract({
                 address: mockUsdc.address,
                 abi: mockUsdc.abi,
@@ -454,16 +435,4 @@ describe("PayableONFT", async function () {
             }
         });
     });
-
-    // describe("Token ID Collision Prevention", () => {
-    //     it("Should use chain prefix for token IDs", async () => {
-    //         const expectedPrefix = BigInt(LOCAL_EID) * BigInt(1_000_000);
-    //         const nextTokenId = await payableOnft.read.nextTokenId();
-
-    //         // Token ID should be greater than the prefix
-    //         // assert.ok(nextTokenId > expectedPrefix, "Token ID should include chain prefix");
-
-    //         // console.log(`✅ Token IDs start from ${expectedPrefix + 1n}`);
-    //     });
-    // });
 });

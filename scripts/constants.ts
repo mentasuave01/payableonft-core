@@ -1,7 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { arbitrum } from "viem/chains";
-
+import { Address } from "viem";
 // ============================================================
 // Network Configuration
 // To add a new network:
@@ -11,18 +10,20 @@ import { arbitrum } from "viem/chains";
 //   4. Add empty entry to deployments.json
 // ============================================================
 
-// LayerZero V2 Endpoint addresses (same on most testnets)
-export const LZ_ENDPOINTS = {
+
+
+// LayerZero V2 Endpoint addresses 
+export const LZ_ENDPOINTS: Record<string, Address> = {
     arbitrumMainnet: "0x1a44076050125825900e736c501f859c50fE728c",
     optimismMainnet: "0x1a44076050125825900e736c501f859c50fE728c",
     baseMainnet: "0x1a44076050125825900e736c501f859c50fE728c",
     hardhatMainnet: "0x6EDCE65403992e310A62460808c4b910D972f10f", // Mock EndpointV2
     localhost: "0x6EDCE65403992e310A62460808c4b910D972f10f", // Mock EndpointV2
 
-} as const;
+};
 
 // LayerZero Endpoint IDs (EIDs)
-export const LZ_EIDS = {
+export const LZ_EIDS: Record<string, number> = {
     arbitrumMainnet: 30110,
     optimismMainnet: 30111,
     baseMainnet: 30184,
@@ -30,8 +31,8 @@ export const LZ_EIDS = {
     localhost: 40161,
 } as const;
 
-// USDC testnet addresses (Circle Testnet USDC)
-export const USDC_ADDRESSES = {
+// USDC  addresses 
+export const USDC_ADDRESSES: Record<string, Address> = {
     arbitrumMainnet: "0x75faf114eafb1BDbe2F031385358e18504701200",
     optimismMainnet: "0x5fd84259d66Cd46123540766Be93DFE6D43130D7",
     baseMainnet: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -40,7 +41,7 @@ export const USDC_ADDRESSES = {
 } as const;
 
 // Chain IDs
-export const CHAIN_IDS = {
+export const CHAIN_IDS: Record<string, number> = {
     arbitrumMainnet: 42161,
     optimismMainnet: 10,
     baseMainnet: 8453,
@@ -50,7 +51,7 @@ export const CHAIN_IDS = {
 
 export type NetworkName = keyof typeof LZ_ENDPOINTS;
 
-// The network that hosts the central minting logic
+// IMPORTANT: The network that hosts the central minting logic 
 export const ORIGIN_NETWORK: NetworkName = "arbitrumMainnet";
 
 // ============================================================
