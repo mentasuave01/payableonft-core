@@ -20,7 +20,7 @@ import {
 /// @notice An ONFT721 with cross-chain minting via lightweight LZ messages.
 /// @dev Mints always land on Origin. Users bridge to other chains on-demand via standard ONFT send().
 ///      Cross-chain mint flow:
-///        Remote: user pays USDC → sends 20-byte message (user address) to Origin
+///        Remote: user pays ERC20 → sends 20-byte message (user address) to Origin
 ///        Origin: receives message → mints NFT to user's address on Origin
 ///        Later:  user bridges NFT wherever they want via send()
 contract PayableONFT is ONFT721, Pausable {
@@ -28,10 +28,11 @@ contract PayableONFT is ONFT721, Pausable {
 
     uint256 public nextTokenId;
 
-    /// @notice Price to mint one NFT (in USDC, 6 decimals)
-    uint256 public constant MINT_PRICE = 10 * 10 ** 6; // 10 USDC
+    /// @notice Price to mint one NFT (in payment token units)
+    uint256 public mintPrice;
 
-    IERC20 public usdc;
+    /// @notice ERC20 token used for mint payments (default: USDC)
+    IERC20 public paymentToken;
 
     /// @notice Origin Chain Endpoint ID where all tokens are minted
     uint32 public immutable originEid;
@@ -48,18 +49,21 @@ contract PayableONFT is ONFT721, Pausable {
         address indexed user,
         uint256 tokenId
     );
+    event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event PaymentTokenUpdated(address oldToken, address newToken);
 
     constructor(
         string memory _name,
         string memory _symbol,
         address _lzEndpoint,
         address _delegate,
-        address _usdc,
+        address _paymentToken,
         uint32 _originEid
     ) ONFT721(_name, _symbol, _lzEndpoint, _delegate) {
-        usdc = IERC20(_usdc);
+        paymentToken = IERC20(_paymentToken);
         originEid = _originEid;
         nextTokenId = 1;
+        mintPrice = 10 * 10 ** 6; // 10 USDC default
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -128,11 +132,11 @@ contract PayableONFT is ONFT721, Pausable {
     //                    INTERNAL — MINTING
     // ═══════════════════════════════════════════════════════════
 
-    /// @dev Pay USDC and mint locally (Origin chain only)
+    /// @dev Pay ERC20 and mint locally (Origin chain only)
     function _payAndMintLocal(address _to) internal returns (uint256) {
         require(
-            usdc.transferFrom(msg.sender, address(this), MINT_PRICE),
-            "USDC Payment failed"
+            paymentToken.transferFrom(msg.sender, address(this), mintPrice),
+            "Payment failed"
         );
         return _mintInternal(_to);
     }
@@ -141,7 +145,7 @@ contract PayableONFT is ONFT721, Pausable {
     function _mintInternal(address _to) internal returns (uint256) {
         uint256 tokenId = nextTokenId++;
         _mint(_to, tokenId);
-        emit MintedAndPaid(_to, tokenId, MINT_PRICE);
+        emit MintedAndPaid(_to, tokenId, mintPrice);
         return tokenId;
     }
 
@@ -151,10 +155,10 @@ contract PayableONFT is ONFT721, Pausable {
      *      No NativeDrop needed since there's no return trip.
      */
     function _requestMint(bytes calldata _extraOptions) internal {
-        // 1. Pay USDC locally
+        // 1. Pay ERC20 locally
         require(
-            usdc.transferFrom(msg.sender, address(this), MINT_PRICE),
-            "USDC Payment failed"
+            paymentToken.transferFrom(msg.sender, address(this), mintPrice),
+            "Payment failed"
         );
 
         // 2. Build minimal message: just the requester's address
@@ -225,14 +229,31 @@ contract PayableONFT is ONFT721, Pausable {
     //                        ADMIN
     // ═══════════════════════════════════════════════════════════
 
-    /// @notice Withdraw collected USDC to owner
-    function withdrawUSDC() external onlyOwner {
-        usdc.transfer(owner(), usdc.balanceOf(address(this)));
+    /// @notice Withdraw collected payment tokens to owner
+    function withdrawTokens() external onlyOwner {
+        paymentToken.transfer(owner(), paymentToken.balanceOf(address(this)));
     }
 
-    /// @notice Update USDC token address
-    function setUSDC(address _usdc) external onlyOwner {
-        usdc = IERC20(_usdc);
+    /// @notice Update the ERC20 payment token used for minting
+    function setPaymentToken(address _token) external onlyOwner {
+        require(_token != address(0), "Invalid token address");
+        address oldToken = address(paymentToken);
+        paymentToken = IERC20(_token);
+        emit PaymentTokenUpdated(oldToken, _token);
+    }
+
+    /// @notice Update mint price
+    /// @param _newPrice The price in whole units (e.g. 10 for 10 USDC)
+    /// @param _decimals The token decimals (e.g. 6 for USDC)
+    function setMintPrice(
+        uint256 _newPrice,
+        uint8 _decimals
+    ) external onlyOwner {
+        require(_newPrice > 0, "Price must be > 0");
+        uint256 rawPrice = _newPrice * 10 ** _decimals;
+        uint256 oldPrice = mintPrice;
+        mintPrice = rawPrice;
+        emit MintPriceUpdated(oldPrice, rawPrice);
     }
 
     /// @notice Pause minting (emergency stop)
