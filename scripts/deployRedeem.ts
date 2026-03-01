@@ -1,5 +1,7 @@
 import { network } from "hardhat";
 import { type NetworkName, getDeployedAddress } from "./constants.js";
+import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * Deploys the Redeem contract for the PayableONFT on the current network.
@@ -32,6 +34,20 @@ async function main() {
 
     console.log("\n✅ Redeem contract deployed successfully!");
     console.log("Contract Address:", redeem.address);
+
+    // Auto-save to redeem_deployements.json
+    const redeemDeploymentsPath = resolve(import.meta.dirname!, "..", "redeem_deployements.json");
+    let redeemDeployments: Record<string, string> = {};
+    try {
+        const raw = readFileSync(redeemDeploymentsPath, "utf-8");
+        redeemDeployments = JSON.parse(raw);
+    } catch (e) {
+        // File doesn't exist yet, we will create it
+    }
+    redeemDeployments[networkName] = redeem.address;
+    writeFileSync(redeemDeploymentsPath, JSON.stringify(redeemDeployments, null, 2) + "\n");
+    console.log(`\n📁 Saved to redeem_deployements.json`);
+
     console.log("\nUsers can now:");
     console.log("  1. Approve the Redeem contract to transfer their NFT");
     console.log("  2. Call redeem(tokenId) to redeem their NFT");
