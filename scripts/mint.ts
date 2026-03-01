@@ -1,5 +1,5 @@
 import { network } from "hardhat";
-import { erc20Abi, parseUnits } from "viem";
+import { erc20Abi, formatUnits } from "viem";
 import { getDeployedAddress } from "./constants.js";
 
 /**
@@ -15,8 +15,6 @@ import { getDeployedAddress } from "./constants.js";
  *   bunx hardhat run scripts/mint.ts --network optimismMainnet
  */
 
-const MINT_PRICE = parseUnits("10", 6); // 10 USDC
-
 async function main() {
     const { viem, networkName } = await network.connect();
 
@@ -30,31 +28,32 @@ async function main() {
     console.log("Wallet:", wallet.account.address);
 
     const onft = await viem.getContractAt("PayableONFT", onftAddress);
-    const usdcAddress = await onft.read.usdc();
+    const tokenAddress = await onft.read.paymentToken();
+    const mintPrice = await onft.read.mintPrice();
 
-    console.log("USDC address:", usdcAddress);
-    console.log("Mint price:", MINT_PRICE.toString(), "(10 USDC)");
+    console.log("Payment token:", tokenAddress);
+    console.log("Mint price:", mintPrice.toString());
 
-    // Step 1: Check USDC balance
+    // Step 1: Check payment token balance
     const balance = await publicClient.readContract({
-        address: usdcAddress,
+        address: tokenAddress,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [wallet.account.address],
     });
-    console.log("USDC balance:", balance.toString());
+    console.log("Token balance:", balance.toString());
 
-    if (balance < MINT_PRICE) {
-        throw new Error(`Insufficient USDC balance. Need ${MINT_PRICE}, have ${balance}`);
+    if (balance < mintPrice) {
+        throw new Error(`Insufficient balance. Need ${mintPrice}, have ${balance}`);
     }
 
-    // Step 2: Approve USDC spending
-    console.log("\n1. Approving USDC...");
+    // Step 2: Approve payment token spending
+    console.log("\n1. Approving payment token...");
     const approveHash = await wallet.writeContract({
-        address: usdcAddress,
+        address: tokenAddress,
         abi: erc20Abi,
         functionName: "approve",
-        args: [onftAddress, MINT_PRICE],
+        args: [onftAddress, mintPrice],
     });
     console.log("Approval tx:", approveHash);
     await publicClient.waitForTransactionReceipt({ hash: approveHash });
@@ -72,9 +71,30 @@ async function main() {
         console.log("   (Remote chain — 1 LZ message to Origin, no round trip)");
     }
 
+    // Step 3.5: Verify allowance before minting
+    const allowance = await publicClient.readContract({
+        address: tokenAddress,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [wallet.account.address, onftAddress],
+    });
+    console.log("\nAllowance check:", allowance.toString(), ">=", mintPrice.toString(), "?", allowance >= mintPrice);
+    if (allowance < mintPrice) {
+        throw new Error(`Allowance too low. Need ${mintPrice}, have ${allowance}. Approval may have failed.`);
+    }
+
     // Step 4: Mint
-    console.log("\n3. Minting NFT...");
-    const mintHash = await onft.write.mint([extraOptions], { value: fee.nativeFee });
+    const isCrossChain = fee.nativeFee > 0n;
+    console.log("\n3. Minting NFT...", isCrossChain ? "(cross-chain → LZ message)" : "(local mint)");
+
+    const mintOptions: Record<string, unknown> = { value: fee.nativeFee };
+    // Local mints: use explicit 300k gas to avoid inflated estimation
+    // Cross-chain mints: need ~500k+ for LZ DVN infrastructure, let estimator calculate
+    if (!isCrossChain) {
+        mintOptions.gas = 300_000n;
+    }
+
+    const mintHash = await onft.write.mint([extraOptions], mintOptions);
     console.log("Mint tx:", mintHash);
     await publicClient.waitForTransactionReceipt({ hash: mintHash });
 

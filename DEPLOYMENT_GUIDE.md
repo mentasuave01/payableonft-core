@@ -61,11 +61,11 @@ Deploy to each network. The script auto-detects MockUSDC if available.
 
 ```bash
 # Origin Chain
-bunx hardhat run scripts/deploy.ts --network arbitrumMainnet --profile production
+bunx hardhat run scripts/deploy.ts --network baseMainnet --profile production
 
 # Remote Chains
+bunx hardhat run scripts/deploy.ts --network arbitrumMainnet --profile production
 bunx hardhat run scripts/deploy.ts --network optimismMainnet --profile production
-bunx hardhat run scripts/deploy.ts --network baseMainnet --profile production
 ```
 
 > Addresses auto-saved to `deployments.json`.
@@ -75,14 +75,14 @@ bunx hardhat run scripts/deploy.ts --network baseMainnet --profile production
 After deploying to all chains, connect them by running `setPeer` on **each chain**:
 
 ```bash
+bunx hardhat run scripts/setPeer.ts --network baseMainnet
 bunx hardhat run scripts/setPeer.ts --network arbitrumMainnet
 bunx hardhat run scripts/setPeer.ts --network optimismMainnet
-bunx hardhat run scripts/setPeer.ts --network baseMainnet
 ```
 
 Verify peers are set correctly:
 ```bash
-bunx hardhat run scripts/checkPeers.ts --network arbitrumMainnet
+bunx hardhat run scripts/checkPeers.ts --network baseMainnet
 ```
 
 ### Step 3: Set USDC (if needed)
@@ -95,7 +95,7 @@ bunx hardhat run scripts/setUSDC.ts --network arbitrumMainnet
 ### Step 4: Set Metadata Base URI
 
 ```bash
-BASE_URI="https://api.myproject.com/metadata/" bunx hardhat run scripts/setBaseURI.ts --network arbitrumMainnet
+BASE_URI="https://api.myproject.com/metadata/" bunx hardhat run scripts/setBaseURI.ts --network baseMainnet
 ```
 
 Token URIs will resolve to `https://api.myproject.com/metadata/1`, `…/2`, etc.
@@ -105,13 +105,13 @@ Token URIs will resolve to `https://api.myproject.com/metadata/1`, `…/2`, etc.
 ### Minting on Origin
 Local mint — instant, no LZ fees:
 ```bash
-bunx hardhat run scripts/mint.ts --network arbitrumMainnet
+bunx hardhat run scripts/mint.ts --network baseMainnet
 ```
 
 ### Minting from a Remote Chain
 Sends a lightweight LZ message to Origin. NFT is minted to your address **on Origin**:
 ```bash
-bunx hardhat run scripts/mint.ts --network optimismMainnet
+bunx hardhat run scripts/mint.ts --network arbitrumMainnet
 ```
 
 ### Bridging an NFT
